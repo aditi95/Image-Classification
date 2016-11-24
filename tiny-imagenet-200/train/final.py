@@ -4,23 +4,27 @@ direc = "./train_small/"
 valdirec = "./valid_small/"
 
 import tensorflow as tf
+from tensorflow.python.ops import rnn, rnn_cell
 import numpy
 from skimage import io
 
 # Parameters
 learning_rate = 0.001
 training_epochs = 500
-batch_size = 100
+batch_size = 500
 display_step = 1
+n_imagesteps = 80
+training_iters = 100
 
 # Network Parameters
 n_hidden_1 = 1024 # 1st layer number of features
 n_hidden_2 = 256 # 2nd layer number of features
 n_input = 6400 #80x80
+n_inp = 80
 n_classes = 104 # total classes (0-103 digits)
 
 # tf Graph input
-x = tf.placeholder("float", [None, n_input])
+x = tf.placeholder("float", [None, n_inp, n_inp])
 y = tf.placeholder("float", [None, n_classes])
 
 xhat = numpy.zeros([17205, n_input])
@@ -84,17 +88,17 @@ def RNN(x, weights, biases):
 
     # Change the data shape to fit the dimentions RNN works best with. Current shape= (batch_size. n_imageiterations, n_input) but we need to change it to (batch_size, n_input)
     x = tf.transpose(x, [1, 0, 2])
-    x = tf.reshape(x, [-1, n_input])
+    x = tf.reshape(x, [-1, n_inp])
     x = tf.split(0, n_imagesteps, x)
 
     # Definition of a tensorflow LSTM cell.
-    lstm_cell = rnn_cell.BasicLSTMCell(n_hidden1, forget_bias=1.0)
+    lstm_cell = rnn_cell.BasicLSTMCell(n_hidden_1, forget_bias=1.0)
 
     # Output
     outputs, states = rnn.rnn(lstm_cell, x, dtype=tf.float32)
 
     # Linear activation, using rnn inner loop last output
-    h2 = tf.matmul(outputs[-1], weights['h1']) + biases['h1']
+    h2 = tf.matmul(outputs[-1], weights['h2']) + biases['b2']
     return tf.matmul(h2, weights['out']) + biases['out']
 
 # Store layers weight & bias
@@ -124,8 +128,23 @@ init = tf.initialize_all_variables()
 # Launch the graph
 with tf.Session() as sess:
     sess.run(init)
+    iteration = 1
+    total_batch = int(17205/batch_size)
+    while iteration < training_iters:
+        for i in range(total_batch):
+            batch_x, batch_y = input_next(i , batch_size)
+            batch_x = batch_x.reshape((batch_size, n_imagesteps, n_inp))
+            sess.run(optimizer, feed_dict={x: batch_x, y: batch_y})
+            if iteration % display_step == 0:
+                #acc = sess.run(cost, feed_dict={x: batch_x, y: batch_y})
+                loss = sess.run(cost, feed_dict={x: batch_x, y: batch_y})
+                acc = 100*acc
+                print("Iteration " + str(iteration*batch_size) + ", Batch Loss= " + \
+                      "{:.6f}".format(loss) )
+        iteration += 1
+    print("Training Finished!")
     # Training cycle
-    for epoch in range(training_epochs):
+    '''for epoch in range(training_epochs):
         avg_cost = 0.
         total_batch = int(17205/batch_size)
         # Loop over all batches
@@ -139,17 +158,17 @@ with tf.Session() as sess:
         if epoch % display_step == 0:
             print("Epoch:", '%04d' % (epoch+1), "cost=", \
                 "{:.9f}".format(avg_cost))
-    print("Optimization Finished!")
+    print("Optimization Finished!")'''
     # Test model
-    correct_prediction = tf.equal(tf.argmax(pred, 1), tf.argmax(y, 1))
+    '''correct_prediction = tf.equal(tf.argmax(pred, 1), tf.argmax(y, 1))
     # Calculate accuracy
-    accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
+    accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))'''
     '''total_valid = int(1829/batch_size)
     accu = 0.0;
     for i in range(total_valid):
         valid_x, valid_y = input_valid(i, batch_size)
         accu += accuracy.eval({x: valid_x, y: valid_y})'''
-    valid_x, valid_y = input_valid(0,1829)
+    '''valid_x, valid_y = input_valid(0,1829)
     accu = accuracy.eval({x: valid_x, y: valid_y})
     print("Accuracy:", accu)
-    saver.save(sess, "./model.ckpt")
+    saver.save(sess, "./model.ckpt")'''
